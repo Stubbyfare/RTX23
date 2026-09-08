@@ -1,0 +1,91 @@
+name: Build Executable
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.0.0)'
+        required: false
+        default: '1.0.0'
+
+jobs:
+  build:
+    name: Build RTX23 Executable
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ['3.9']
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Run tests
+      run: |
+        pytest tests/test_rtx23.py -v
+
+    - name: Build executable (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        pyinstaller --onefile --windowed --name=RTX23 main.py
+      continue-on-error: true
+
+    - name: Build executable (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        pyinstaller --onefile --name=RTX23 main.py
+
+    - name: Upload artifacts (Windows)
+      if: runner.os == 'Windows'
+      uses: actions/upload-artifact@v3
+      with:
+        name: RTX23-Windows
+        path: dist/RTX23.exe
+
+    - name: Upload artifacts (Linux)
+      if: runner.os == 'Linux'
+      uses: actions/upload-artifact@v3
+      with:
+        name: RTX23-Linux
+        path: dist/RTX23
+
+    - name: Create Release
+      if: success()
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ github.event.inputs.version }}
+        release_name: RTX23 v${{ github.event.inputs.version }}
+        body: |
+          ## RTX23 Executable Release
+          
+          Built from commit: ${{ github.sha }}
+          
+          ### Downloads
+          - **Windows**: RTX23-Windows.exe
+          - **Linux**: RTX23-Linux
+          
+          ### Instructions
+          1. Download the executable for your operating system
+          2. Run directly without installation
+          3. Launch and enjoy enhanced gaming visuals!
+          
+          ### System Requirements
+          - Windows 10/11 or Linux
+          - GPU with at least 2GB VRAM
+          - DirectX 11+ or OpenGL 4.3+
+        draft: false
+        prerelease: false
